@@ -1,0 +1,19 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "get_zappi_month.py",
+            "console": "integratedTerminal",
+            "args": ["--month", "9"],
+            //"args": ["--month", "9", "--reuse_csv_files"],
+            //"args": ["--year", "2022", "--month", "all"],
+            "justMyCode": true
+        }
+    ]
+}
