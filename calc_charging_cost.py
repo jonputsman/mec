@@ -78,6 +78,8 @@ def calculate_charging_summary(charging_df):
     temp_df = charging_df.copy()
     charge_summary_df = temp_df[columns].groupby('Date').sum()
     charge_summary_df['Charge cost'] = charge_summary_df['Charge cost'] / 100
+    
+    print(charge_summary_df)
     print("Total charging cost: %f" % charge_summary_df['Charge cost'].sum())
 
     return charge_summary_df
