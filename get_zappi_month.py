@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import getopt
 import time
+import datetime
 import sys
 import os
 from pathlib import Path
@@ -22,6 +23,7 @@ FIELD_NAMES = {'gep': 'Generation',
                'imp': 'Imported',
                'exp': 'Exported'}
 
+last_day_of_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
 class Day():
 
@@ -31,7 +33,8 @@ class Day():
         self.tm_mday = day
 
     def GetString(self):
-        return str(self.tm_year) + "-" + str(self.tm_mon) + "-" + str(self.tm_mday)
+        date = datetime.datetime(self.tm_year, self.tm_mon, self.tm_mday, 0, 0)
+        return date.strftime("%Y-%m-%d")
 
 show_headers = True
 
@@ -42,7 +45,8 @@ def main():
 
     args = ['month=',
             'year=',
-            'reuse_csv_files']
+            'reuse_csv_files',
+            'adjust_for_bst']
     try:
         opts, args = getopt.getopt(sys.argv[1:], '', args)
     except getopt.GetoptError:
@@ -51,6 +55,7 @@ def main():
         sys.exit(2)
 
     reuse_csv_files = False
+    adjust_for_bst = False
 
     today = time.localtime()
     day = Day(today.tm_year, today.tm_mon, today.tm_mday)
@@ -62,6 +67,8 @@ def main():
             day.tm_year = value
         elif opt == '--reuse_csv_files':
             reuse_csv_files = True
+        elif opt == '--adjust_for_bst':
+            adjust_for_bst = True
 
     config = run_zappi.load_config(debug=False)
 
@@ -69,7 +76,7 @@ def main():
     server_conn.refresh()
 
     # Create output folder
-    output_folder = "result-data"
+    output_folder = "results"
     Path(output_folder).mkdir(parents=True, exist_ok=True)
 
     if day.tm_mon == "all":
@@ -87,14 +94,13 @@ def main():
         day.tm_mon = month
         filename = str(day.tm_year) + "-" + str(day.tm_mon) + ".csv"
         filename = os.path.join(output_folder, filename)
-        last_day_of_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
         start_day = 1
         end_day = last_day_of_month[int(day.tm_mon)-1]
 
-        GetMonthData(server_conn, day, start_day, end_day, filename, reuse_csv_files)
+        GetMonthData(server_conn, day, start_day, end_day, filename, reuse_csv_files, adjust_for_bst)
         ProcessMonth(filename, day.tm_year, day.tm_mon, start_day, end_day)
 
-def GetMonthData(server_conn, day, start_day, end_day, filename, reuse_csv_files):
+def GetMonthData(server_conn, day, start_day, end_day, filename, reuse_csv_files, adjust_for_bst):
     headers_written = False
  
     if not os.path.exists(filename) or not reuse_csv_files: 
@@ -109,15 +115,16 @@ def GetMonthData(server_conn, day, start_day, end_day, filename, reuse_csv_files
                 day.tm_mday = daynum
 
                 british_summer_time = False
-                if day.tm_mon >= 3 and day.tm_mon <= 10:
-                    if day.tm_mon == 3:
-                        if day.tm_mday >= 27:
+                if adjust_for_bst:
+                    if day.tm_mon >= 3 and day.tm_mon <= 10:
+                        if day.tm_mon == 3:
+                            if day.tm_mday >= 27:
+                                british_summer_time = True
+                        elif day.tm_mon == 10:
+                            if day.tm_mday <= 30:
+                                british_summer_time = True
+                        else:
                             british_summer_time = True
-                    elif day.tm_mon == 10:
-                        if day.tm_mday <= 30:
-                            british_summer_time = True
-                    else:
-                        british_summer_time = True
 
                 headers, data, _ = load_day(server_conn, zappi.sno, day, british_summer_time)
                 if headers_written == False:
@@ -170,6 +177,11 @@ def load_day(server_conn, zid, day, british_summer_time):
             hour = 0
             day_copy.tm_mday += 1
 
+        # If BST correction pushes day past end of month, increment month
+        last_day = last_day_of_month[day_copy.tm_mon-1]
+        if day_copy.tm_mday > last_day:
+            day_copy.tm_mday = 1
+            day_copy.tm_mon += 1
 
         sample_time = ((hour * 60) + minute) * 60
 
@@ -184,6 +196,9 @@ def load_day(server_conn, zid, day, british_summer_time):
 
         row.append(day_copy.GetString())
         row.append('{:02}:{:02}'.format(hour, minute))
+        if prev_sample_time > sample_time:
+            # Time wrapped because of day change
+            sample_time += 24 * 60 * 60
         row.append(sample_time - prev_sample_time)
 
         for key in headers:
@@ -237,7 +252,8 @@ def PandasProcessMonth(data, year, month, start_day, end_day, output_filename):
         zappi_imported_on_peak = []
         zappi_imported_off_peak = []
 
-        day_string = str(year) + "-" + str(month) + "-" + str(_day)
+        date = datetime.datetime(year, month, _day, 0, 0)
+        day_string = date.strftime("%Y-%m-%d")
 
         day_of_interest = data['Date'].str.fullmatch(day_string) 
         my_data = pd.DataFrame(data[day_of_interest])
@@ -260,7 +276,7 @@ def PandasProcessMonth(data, year, month, start_day, end_day, output_filename):
             rec = {}
             rec["Date"] = day_string
             rec["Import Amount"] = WattMinsToKWh(sum(zappi_imported_off_peak))
-            rec["Unit Cost"] = 7.5
+            rec["Unit Cost"] = 12.5
             rec["Cost"] = rec["Import Amount"] * rec["Unit Cost"] / 100
             rec["kWh Charged"] = WattMinsToKWh(sum(charged_off_peak))
             series_list.append(pd.Series(rec))
@@ -269,7 +285,7 @@ def PandasProcessMonth(data, year, month, start_day, end_day, output_filename):
             rec = {}
             rec["Date"] = day_string
             rec["Import Amount"] = WattMinsToKWh(sum(zappi_imported_on_peak))
-            rec["Unit Cost"] = 30.83
+            rec["Unit Cost"] = 45
             rec["Cost"] = rec["Import Amount"] * rec["Unit Cost"] / 100
             rec["kWh Charged"] = WattMinsToKWh(sum(charged_on_peak))
             series_list.append(pd.Series(rec))
