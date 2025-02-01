@@ -62,9 +62,9 @@ def main():
 
     for opt, value in opts:
         if opt == '--month':
-            day.tm_mon = value
+            day.tm_mon = int(value)
         elif opt == '--year':
-            day.tm_year = value
+            day.tm_year = int(value)
         elif opt == '--reuse_csv_files':
             reuse_csv_files = True
         elif opt == '--adjust_for_bst':
@@ -154,6 +154,7 @@ def load_day(server_conn, zid, day, british_summer_time):
             table_headers.append(FIELD_NAMES[key])
         else:
             table_headers.append(key)
+    
     for rec in res:
         row = []
         hour = 0

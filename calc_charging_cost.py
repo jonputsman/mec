@@ -85,8 +85,13 @@ def calculate_charging_summary(charging_df):
     charge_summary_df = temp_df[columns].groupby('Date').sum()
     charge_summary_df['Charge cost'] = charge_summary_df['Charge cost'] / 100
     charge_summary_df['Charging unit cost'] = charge_summary_df['Charge cost'] / charge_summary_df['Zappi Imported kWh']
+
+    # Date	Import Amount	Unit cost (p/kWH)	Cost (£)	kWh charged (est.)
+    new_cols = [ 'Zappi Imported kWh', 'Charge cost', 'Charging unit cost', 'Zappi diverted']
+    charge_summary_df = charge_summary_df[new_cols]
     
     print(charge_summary_df)
+    print("Total charged kWh: %f" % charge_summary_df['Zappi Imported kWh'].sum())
     print("Total charging cost: %f" % charge_summary_df['Charge cost'].sum())
 
     return charge_summary_df
